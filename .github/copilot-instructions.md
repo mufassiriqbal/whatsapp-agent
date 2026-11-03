@@ -5,3 +5,4 @@
 - Secrets come from env vars only.
 - Answers must be short. No restating the question. Code first, one line of explanation max.
 - When editing, show only changed functions or a diff, not whole files.
+   - Repo layout: each service is a top-level folder (rag/, backend/, frontend/, gateway/, voice/). Shared code lives in shared/. Services import each other only through shared/ or over HTTP.
