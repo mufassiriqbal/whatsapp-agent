@@ -1,7 +1,6 @@
 import qdrant_client
 from qdrant_client import models
-
-from services.knowledge.app.models import User
+from app.models import User
 
 
 def build_acl_filter(user: User) -> qdrant_client.models.Filter:
