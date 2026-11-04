@@ -1,9 +1,14 @@
 from contextvars import ContextVar
+import logging
 from typing import TypedDict
 
+import httpx
 from langchain_core.tools import tool
 
 from app.rag_client import search_knowledge_remote
+
+
+logger = logging.getLogger(__name__)
 
 
 class VerifiedUser(TypedDict):
@@ -34,13 +39,20 @@ def search_knowledge(query: str) -> str:
     if user is None:
         raise RuntimeError("No verified user is set")
 
-    results = search_knowledge_remote(
-        user["user_id"],
-        user["tenant_id"],
-        user["groups"],
-        query,
-        k=4,
-    )
+    try:
+        results = search_knowledge_remote(
+            user["user_id"],
+            user["tenant_id"],
+            user["groups"],
+            query,
+            k=4,
+        )
+    except httpx.HTTPStatusError:
+        logger.exception("Knowledge base request failed with an HTTP status error")
+        return "The company knowledge base is temporarily unavailable. Tell the user you can't check that right now and offer to connect them with a human."
+    except httpx.HTTPError:
+        logger.exception("Knowledge base request failed")
+        return "The company knowledge base is temporarily unavailable. Tell the user you can't check that right now and offer to connect them with a human."
     if not results:
         return "No matching company documents found."
 
