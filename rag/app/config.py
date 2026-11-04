@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     embedding_dim: int
     chunk_size: int
     chunk_overlap: int
+    internal_token: str
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
