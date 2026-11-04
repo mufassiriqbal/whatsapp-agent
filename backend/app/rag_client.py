@@ -18,7 +18,7 @@ def search_knowledge_remote(
         "query": query,
         "k": max(1, min(10, k)),
     }
-    with httpx.Client(timeout=10) as client:
+    with httpx.Client(timeout=60) as client:
         response = client.post(
             f"{settings.rag_url}/search",
             json=payload,
