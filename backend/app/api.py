@@ -8,6 +8,9 @@ from app.config import get_settings
 from app.graph import graph
 from app.tools import clear_current_user, set_current_user
 
+from app.web_routes import router as web_router
+
+
 
 class ChatRequest(BaseModel):
     conversation_id: str
@@ -22,7 +25,7 @@ class ChatResponse(BaseModel):
 
 
 app = FastAPI()
-
+app.include_router(web_router)
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(

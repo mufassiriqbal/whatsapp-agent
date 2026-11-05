@@ -1,1 +1,5 @@
-{"+923001112222": {"user_id": "u1", "tenant_id": "acme", "groups": ["hr"]}, "+923003334444": {"user_id": "u2", "tenant_id": "acme", "groups": ["sales"]}}
+{
+  "+923472077295": {"user_id": "u3", "tenant_id": "acme", "groups": ["hr"]},
+  "+923001112222": {"user_id": "u1", "tenant_id": "acme", "groups": ["hr"]},
+  "+923003334444": {"user_id": "u2", "tenant_id": "acme", "groups": ["sales"]}
+}

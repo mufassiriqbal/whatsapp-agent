@@ -1,0 +1,4 @@
+{
+  "hr_user": {"password_hash": "d19f468ecb3c8014354d078fde108bc7$8e63eef3934d83c044fcb753cc9e99d7ab94ea551d8c1affac0ea07e3b826a20", "user_id": "u1", "tenant_id": "acme", "groups": ["hr"]},
+  "sales_user": {"password_hash": "eb1515651870358b082a9eb79e0b1820$ffaede8cb8dcdd658019278b22ea93db0fadea23aef03df143432181eae7506c", "user_id": "u2", "tenant_id": "acme", "groups": ["sales"]}
+}
