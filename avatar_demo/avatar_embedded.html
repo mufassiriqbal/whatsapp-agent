@@ -1,0 +1,214 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Talking Avatar</title>
+<style>
+  body {
+    margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; padding: 20px;
+    background: #1b1f27; color: #eee; font-family: system-ui, sans-serif;
+  }
+  #stage {
+    position: relative; width: 512px; height: 512px; border-radius: 24px;
+    overflow: hidden; background: #888; transform-origin: 50% 60%;
+  }
+  .abs { position: absolute; }
+  #photo { left: 0; top: 0; width: 512px; height: 512px; }
+  .eye-copy, .blink {
+    width: 56px; height: 24px; background-image: url(data:image/jpeg;base64,);
+    background-size: 512px 512px; background-repeat: no-repeat;
+  }
+  .blink { transform-origin: 50% 0; transform: scaleY(0); }
+  #mouthDark {
+    background: radial-gradient(ellipse at center, #2a0f12 0%, #5a2226 70%, transparent 100%);
+    border-radius: 50%; opacity: 0;
+  }
+  #jaw {
+    background-image: url(data:image/jpeg;base64,); background-size: 512px 512px;
+    clip-path: inset(310px 0 0 0);
+  }
+  #controls { width: 512px; display: flex; flex-direction: column; gap: 8px; }
+  textarea { width: 100%; height: 70px; border-radius: 8px; padding: 8px; font-size: 14px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  button { padding: 8px 14px; border-radius: 8px; border: 0; cursor: pointer; }
+  #status { font-size: 13px; color: #9ab; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <!-- Base photo -->
+  <img id="photo" class="abs" src="data:image/jpeg;base64," alt="Assistant">
+
+  <!-- Dark mouth interior, shown when the mouth opens -->
+  <div id="mouthDark" class="abs"></div>
+
+  <!-- Lower face (jaw and lower lip), moves down when speaking -->
+  <div id="jaw" class="abs" style="left:0; top:0; width:512px; height:512px;"></div>
+
+  <!-- Eye copies: small sideways movement for eye motion -->
+  <div id="eyeL" class="eye-copy abs"></div>
+  <div id="eyeR" class="eye-copy abs"></div>
+
+  <!-- Eyelids: skin patches that scale down over the eyes to blink -->
+  <div id="blinkL" class="blink abs"></div>
+  <div id="blinkR" class="blink abs"></div>
+</div>
+
+<div id="controls">
+  <textarea id="text">Hello, I am your assistant. How can I help you today?</textarea>
+  <div class="row">
+    <button id="speakBtn">Speak</button>
+    <button id="stopBtn">Stop</button>
+    <label><input type="checkbox" id="mute"> Mute</label>
+    <span id="status"></span>
+  </div>
+</div>
+
+<script>
+// ---- Tuning constants (pixels on the 512 x 512 stage) ----
+const EYE_L = { x: 204, y: 209 };   // centre of left eye
+const EYE_R = { x: 305, y: 209 };   // centre of right eye
+const MOUTH = { x: 254, y: 321 };   // centre of mouth
+const SKIN_BELOW = 240;             // y in photo used as skin when blinking
+const JAW_MAX = 12;                 // how far the jaw drops (px)
+
+// ---- Set up eye and eyelid positions from the photo ----
+function placeEyePatch(el, cx, cy, mode) {
+  const left = cx - 28, top = cy - 12;
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+  if (mode === 'eye') {
+    el.style.backgroundPosition = (-left) + 'px ' + (-top) + 'px';
+  } else { // blink: show cheek skin from below the eye
+    el.style.backgroundPosition = (-left) + 'px ' + (-SKIN_BELOW) + 'px';
+  }
+}
+placeEyePatch(document.getElementById('eyeL'), EYE_L.x, EYE_L.y, 'eye');
+placeEyePatch(document.getElementById('eyeR'), EYE_R.x, EYE_R.y, 'eye');
+placeEyePatch(document.getElementById('blinkL'), EYE_L.x, EYE_L.y, 'blink');
+placeEyePatch(document.getElementById('blinkR'), EYE_R.x, EYE_R.y, 'blink');
+
+// Mouth interior and jaw
+const mouthDark = document.getElementById('mouthDark');
+mouthDark.style.left = (MOUTH.x - 40) + 'px';
+mouthDark.style.width = '80px';
+mouthDark.style.top = (MOUTH.y - 8) + 'px';
+
+const jaw = document.getElementById('jaw');
+const blinkL = document.getElementById('blinkL');
+const blinkR = document.getElementById('blinkR');
+const eyeL = document.getElementById('eyeL');
+const eyeR = document.getElementById('eyeR');
+const stage = document.getElementById('stage');
+
+// ---- Speech state ----
+let speaking = false;
+let mouthTarget = 0;
+let mouth = 0;
+let lastBoundary = 0;
+
+function shapeFor(ch) {
+  if ('aeiou'.includes(ch)) return 0.8;   // open vowels
+  if ('mbp'.includes(ch)) return 0.02;    // closed lips
+  if ('fv'.includes(ch)) return 0.2;      // lip to teeth
+  if ('wr'.includes(ch)) return 0.35;     // rounded
+  if (ch === ' ' || /[.,!?;:]/.test(ch)) return 0;
+  return 0.4;                             // other consonants
+}
+
+function pulse(v) {
+  mouthTarget = v;
+  setTimeout(() => { if (speaking) mouthTarget = 0.12; }, 90);
+}
+
+function speak(text) {
+  stop();
+  if (document.getElementById('mute').checked || !text.trim()) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.95;
+  const en = speechSynthesis.getVoices().find(v => v.lang.startsWith('en'));
+  if (en) u.voice = en;
+  u.onstart = () => { speaking = true; lastBoundary = performance.now(); document.getElementById('status').textContent = 'Speaking...'; };
+  u.onboundary = (e) => {
+    lastBoundary = performance.now();
+    const ch = text.charAt(e.charIndex).toLowerCase();
+    pulse(shapeFor(ch) * (0.9 + Math.random() * 0.2));
+  };
+  u.onend = u.onerror = () => { speaking = false; mouthTarget = 0; document.getElementById('status').textContent = ''; };
+  speechSynthesis.speak(u);
+}
+
+function stop() {
+  speechSynthesis.cancel();
+  speaking = false;
+  mouthTarget = 0;
+}
+
+document.getElementById('speakBtn').onclick = () => speak(document.getElementById('text').value);
+document.getElementById('stopBtn').onclick = stop;
+document.getElementById('mute').onchange = (e) => { if (e.target.checked) stop(); };
+
+// ---- Main animation loop ----
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let nextBlink = performance.now() + 2000;
+let blinkStart = -1;
+let gaze = 0, gazeTarget = 0, nextGaze = 0;
+
+function blinkScale(now) {
+  if (blinkStart < 0) return 1;
+  const t = now - blinkStart;
+  if (t < 90) return 1 - t / 90;          // close
+  if (t < 210) return (t - 90) / 120;     // open
+  blinkStart = -1;
+  return 1;
+}
+
+function frame(now) {
+  // Blinking
+  if (blinkStart < 0 && now > nextBlink) {
+    blinkStart = now;
+    nextBlink = now + 2500 + Math.random() * 3500;
+    if (Math.random() < 0.15) nextBlink = now + 250; // occasional double blink
+  }
+  const s = blinkScale(now);
+  blinkL.style.transform = 'scaleY(' + (1 - s) + ')';
+  blinkR.style.transform = 'scaleY(' + (1 - s) + ')';
+
+  // Mouth: move toward target, and add a little idle noise while speaking
+  if (speaking && now - lastBoundary > 300) {
+    mouthTarget = 0.25 + Math.random() * 0.35;
+    lastBoundary = now - 200;
+  }
+  mouth += (mouthTarget - mouth) * 0.3;
+  const open = Math.max(0, Math.min(1, mouth));
+  jaw.style.transform = 'translateY(' + (open * JAW_MAX) + 'px)';
+  mouthDark.style.opacity = open;
+  mouthDark.style.height = (4 + open * 14) + 'px';
+
+  // Eye movement: small slow glance
+  if (now > nextGaze) {
+    gazeTarget = reduceMotion ? 0 : (Math.random() * 3 - 1.5);
+    nextGaze = now + 2000 + Math.random() * 2000;
+  }
+  gaze += (gazeTarget - gaze) * 0.05;
+  eyeL.style.transform = 'translateX(' + gaze + 'px)';
+  eyeR.style.transform = 'translateX(' + gaze + 'px)';
+
+  // Head sway and breathing (disabled if reduced motion is set)
+  if (!reduceMotion) {
+    const x = Math.sin(now * 0.0007) * 2;
+    const y = Math.sin(now * 0.0011) * 1.5;
+    const r = Math.sin(now * 0.0005) * 0.6;
+    const k = 1 + 0.004 * Math.sin(now * 0.0016);
+    stage.style.transform = 'translate(' + x + 'px,' + y + 'px) rotate(' + r + 'deg) scale(' + k + ')';
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

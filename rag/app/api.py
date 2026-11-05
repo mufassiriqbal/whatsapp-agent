@@ -28,6 +28,14 @@ class SearchResponse(BaseModel):
 
 app = FastAPI()
 
+@app.on_event("startup")
+def warm_up() -> None:
+    from app.embeddings import get_embeddings
+    from app.vectorstore import get_vectorstore
+
+    get_embeddings().embed_query("warm up")
+    get_vectorstore()
+
 
 @app.post("/search", response_model=SearchResponse)
 async def search(

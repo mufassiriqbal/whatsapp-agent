@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Web Assistant</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f3f6fb;
+      color: #172033;
+      display: grid;
+      place-items: center;
+    }
+
+    main {
+      width: min(92vw, 680px);
+      min-height: 520px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 12px 40px #1720331f;
+      overflow: hidden;
+    }
+
+    header {
+      background: #2457a6;
+      color: white;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      margin: 0;
+    }
+
+    section {
+      padding: 28px;
+    }
+
+    form {
+      display: grid;
+      gap: 14px;
+      max-width: 360px;
+      margin: 60px auto;
+    }
+
+    label {
+      font-weight: 600;
+    }
+
+    input, button {
+      font: inherit;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    input {
+      border: 1px solid #bac5d8;
+    }
+
+    button {
+      border: 0;
+      background: #2457a6;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #194586;
+    }
+
+    .secondary {
+      background: transparent;
+      border: 1px solid #ffffff99;
+      padding: 6px 10px;
+    }
+
+    .secondary:hover {
+      background: #ffffff1a;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .error {
+      color: #b42318;
+      min-height: 1.4em;
+    }
+
+    .messages {
+      height: 330px;
+      overflow-y: auto;
+      border: 1px solid #dce3ee;
+      border-radius: 10px;
+      padding: 12px;
+      display: grid;
+      align-content: start;
+      gap: 10px;
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 9px 12px;
+      border-radius: 12px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .user {
+      justify-self: end;
+      background: #dceafe;
+    }
+
+    .bot {
+      justify-self: start;
+      background: #eef1f5;
+    }
+
+    .chat-controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .chat-controls input {
+      flex: 1;
+    }
+
+    .options {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .options input {
+      width: auto;
+    }
+
+    .avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: #ffd166;
+      border: 3px solid #d79b22;
+      margin: 0 auto 18px;
+      position: relative;
+    }
+
+    .eye {
+      position: absolute;
+      top: 22px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #172033;
+    }
+
+    .eye.left {
+      left: 18px;
+    }
+
+    .eye.right {
+      right: 18px;
+    }
+
+    .mouth {
+      position: absolute;
+      left: 27px;
+      top: 43px;
+      width: 18px;
+      height: 5px;
+      border-radius: 0 0 12px 12px;
+      background: #172033;
+      transition: height 80ms ease;
+    }
+
+    .speaking .mouth {
+      height: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Web Assistant</h1>
+      <button id="logout" class="secondary hidden" type="button">Log out</button>
+    </header>
+
+    <section id="login-view">
+      <form id="login-form">
+        <h2>Sign in</h2>
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button type="submit">Log in</button>
+        <div id="login-error" class="error" role="alert"></div>
+      </form>
+    </section>
+
+    <section id="chat-view" class="hidden">
+      <div id="avatar" class="avatar" aria-label="Assistant avatar">
+        <span class="eye left"></span>
+        <span class="eye right"></span>
+        <span class="mouth"></span>
+      </div>
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <form id="chat-form" class="chat-controls">
+        <input id="message" maxlength="2000" placeholder="Type a message..." required>
+        <button type="submit">Send</button>
+      </form>
+      <label class="options">
+        <input id="mute" type="checkbox">
+        Mute spoken replies
+      </label>
+      <div id="chat-error" class="error" role="alert"></div>
+    </section>
+  </main>
+
+  <script>
+    let token = null;
+
+    const loginView = document.getElementById("login-view");
+    const chatView = document.getElementById("chat-view");
+    const loginForm = document.getElementById("login-form");
+    const loginError = document.getElementById("login-error");
+    const chatForm = document.getElementById("chat-form");
+    const chatError = document.getElementById("chat-error");
+    const messages = document.getElementById("messages");
+    const logoutButton = document.getElementById("logout");
+    const avatar = document.getElementById("avatar");
+
+    function showLogin(message = "") {
+      token = null;
+      loginView.classList.remove("hidden");
+      chatView.classList.add("hidden");
+      logoutButton.classList.add("hidden");
+      loginError.textContent = message;
+      document.getElementById("password").value = "";
+    }
+
+    function showChat() {
+      loginView.classList.add("hidden");
+      chatView.classList.remove("hidden");
+      logoutButton.classList.remove("hidden");
+      chatError.textContent = "";
+      document.getElementById("message").focus();
+    }
+
+    function addMessage(text, kind) {
+      const element = document.createElement("div");
+      element.className = `message ${kind}`;
+      element.textContent = text;
+      messages.appendChild(element);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function speak(text) {
+      if (document.getElementById("mute").checked || !("speechSynthesis" in window)) {
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.onstart = () => avatar.classList.add("speaking");
+      utterance.onend = () => avatar.classList.remove("speaking");
+      utterance.onerror = () => avatar.classList.remove("speaking");
+      window.speechSynthesis.speak(utterance);
+    }
+
+    loginForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      loginError.textContent = "";
+      const response = await fetch("/web/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          username: document.getElementById("username").value,
+          password: document.getElementById("password").value
+        })
+      });
+      if (response.status === 401) {
+        loginError.textContent = "Wrong username or password";
+        return;
+      }
+      if (!response.ok) {
+        loginError.textContent = "Unable to log in. Please try again.";
+        return;
+      }
+      token = (await response.json()).token;
+      showChat();
+    });
+
+    chatForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = document.getElementById("message");
+      const message = input.value.trim();
+      if (!message || !token) {
+        return;
+      }
+      addMessage(message, "user");
+      input.value = "";
+      chatError.textContent = "";
+      const response = await fetch("/web/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({message})
+      });
+      if (response.status === 401) {
+        showLogin("Session expired");
+        return;
+      }
+      if (!response.ok) {
+        chatError.textContent = "The assistant could not respond. Please try again.";
+        return;
+      }
+      const reply = (await response.json()).reply;
+      addMessage(reply, "bot");
+      speak(reply);
+    });
+
+    logoutButton.addEventListener("click", () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      avatar.classList.remove("speaking");
+      showLogin();
+    });
+  </script>
+</body>
+</html>

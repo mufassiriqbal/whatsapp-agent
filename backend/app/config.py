@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     internal_token: str
     google_api_key: str
     llm_model: str
+    web_session_secret: str
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
